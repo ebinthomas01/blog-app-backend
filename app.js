@@ -2,6 +2,7 @@ const express = require("express")
 const mongoose = require("mongoose")
 const cors = require("cors")
 const bcryptjs = require("bcryptjs")
+const jwt = require("jsonwebtoken")
 const { blogmodel } = require("./models/blog")
 
 const app = express()
@@ -22,35 +23,61 @@ app.post("/signup", async (req, res) => {
     input.password = HashedPass
     let blog = new blogmodel(input)
     blog.save()
+    res.json({ "status": "success" })
 })
 
 app.post("/signin", (req, res) => {
     let input = req.body
     blogmodel.find({ "email": req.body.email }).then(
-        (response)=>{
-            if (response.length>0) 
-                {
-                    let dbPassword= response[0].password
-                    console.log(dbPassword)
-                    bcryptjs.compare(input.password,dbPassword,(error,isMatch) =>{
-                        if(isMatch)
-                            {
-                                res.json({"status":"Success","name":response[0]._id})
+        (response) => {
+            if (response.length > 0) {
+                let dbPassword = response[0].password
+                console.log(dbPassword)
+                bcryptjs.compare(input.password, dbPassword, (error, isMatch) => {
+                    if (isMatch) {
+                        jwt.sign({ email: input.email }, "blog-app", { expiresIn: "1d" },
+                            (error, token) => {
+                                if (error) {
+                                    res.json({ "status": "Unable to create token" })
+                                }
+                                else {
+                                    res.json({ "status": "success", "name": response[0]._id, "token": token })
+                                }
                             }
-                        else
-                            {
-                                res.json({"status":"Incorrect Password"})
-                            }
-                    })
-                }
-            else
-                {
-                    res.json({"status":"User not Found"})
-                }
+                        )
+                    }
+                    else {
+                        res.json({ "status": "Incorrect Password" })
+                    }
+                })
+            }
+            else {
+                res.json({ "status": "User not Found" })
+            }
         }
     ).catch()
 })
 
+app.post("/view", (req, res) => {
+    let token = req.headers["token"]
+    jwt.verify(token, "blog-app", (error, decoded) => {
+        if (decoded) {
+            blogmodel.find().then(
+                (response) => {
+                    res.json(response)
+                }
+            ).catch()
+        }
+        else {
+            res.json({ "status": "Un-Authorised Access" })
+        }
+    })
+
+})
+
+
 app.listen(8080, () => {
     console.log("Server Running")
 })
+
+
